@@ -1,5 +1,5 @@
 Bill
-Billy
+Jill
 Bob
 Rob
 Doug
@@ -22,7 +22,7 @@ Henry
 Fernando
 Delta
 John
-Jimmy
+Jimbo
 Giru
 Goose
 Hornet
@@ -30,7 +30,7 @@ Zote
 Winnie
 Banana
 Alex
-Banana
+Jack
 Mojo
 Humphrey
 Horatio
