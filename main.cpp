@@ -1,9 +1,9 @@
 /* Tomas Carranza Echaniz
-*  1/16/2026
-*  This program is a student database that uses a linked list, using my partner's Node.h and Node.cpp files. You can
-*  ADD a new student, which will be added to the list in increasing ID order. You can DELETE the student, and PRINT
-*  all the students' data. You can also print the AVERAGE of all their GPAs, ask for HELP to print all the valid
-*  commands, or QUIT the program.
+*  1/22/2026
+*  This program is a student database that uses a hash table which handles collisions using chaining. The hash algorithm
+*  used is SHA-3. The user can ADD a new student, which will be added to the list in increasing ID order. You can DELETE
+*  the student, and PRINT all the students' data. You can also print the AVERAGE of all their GPAs, ask for HELP to print
+*  all the valid commands, or QUIT the program.
 */
 
 #include <iostream>
@@ -12,7 +12,9 @@
 #include <iomanip>
 #include "Student.h"
 #include "Node.h"
+#include "SHA3.h"
 using namespace std;
+using namespace SHA3;
 
 //for ignoring faulty input and extra characters, functionality taken from my previous projects
 void CinIgnoreAll(bool force = false) {
@@ -222,10 +224,11 @@ void printAll(Node* current, bool first = false) {
 
 //the main player loop
 int main() {
-    Node* first = NULL; //the start of the linked list
+    Node* table[100] = {NULL}; //the hash table of linked lists
+    Node* first = NULL; //im keeping this until i readjust everything
     
     //welcome message with instructions
-    cout << "\nWelcome to LINKED LISTS PART 2!\nYou are making a database of students using a linked list.\nType HELP for help.\n\nThere are currently no students. (type ADD for add)";
+    cout << "\nHello I am HARRY the HASH TABLE!\nI am managing a database of students.\nType HELP for help.\n\nThere are currently no students. (type ADD for add)";
     
     //continues until continuing is falsified (by typing QUIT)
     bool continuing = true;
@@ -258,8 +261,8 @@ int main() {
         CinIgnoreAll(); //ignore any invalid or extra input that may have been typed this time
     }
 
-    //bids the user adieu
-    cout <<"\nIn case I don't see ya, good afternoon, good evening, and good night!\n";
+    //says bye
+    cout <<"\nHHHHHHHHHHHHHHHHHHH\n";
 
     //deletes all the code for good practice, iterates until the node is null meaning they're all deleted and goes to the stored next node at the end of each iteration
 
