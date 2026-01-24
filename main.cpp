@@ -13,6 +13,7 @@
 #include <limits>
 #include <cstring>
 #include <iomanip>
+#include <string>
 #include "Student.h"
 #include "Node.h"
 #include "SHA3.h"
@@ -229,9 +230,9 @@ void printAll(Node* current, bool first = false) {
 int main() {
     Node* table[100] = {NULL}; //the hash table of linked lists
     Node* first = NULL; //im keeping this until i readjust everything
-    
+
     //welcome message with instructions
-    cout << "\nHello I am HARRY the HASH TABLE!\nI am managing a database of students.\nType HELP for help.\n\nThere are currently no students. (type ADD for add)";
+    cout << "\nHello I am Harry the hash table!\nI am managing a database of students.\nType HELP for help.\n\nThere are currently no students. (type ADD for add)";
     
     //continues until continuing is falsified (by typing QUIT)
     bool continuing = true;
@@ -254,7 +255,7 @@ int main() {
         } else if (!strcmp(command, "AVERAGE")) { //print average gpa of all students
             average(first);
         } else if (!strcmp(command, "HELP")) { //print all valid command words
-            cout << "\nYour command words are:\nADD - Manually create a new student.\nGENERATE - Randomly generate a given amount of students.\nDELETE - Delete an existing student by ID.\nPRINT - Print the data of all students.\nAVERAGE - Calcuate the average GPA of all students.\nHELP - Print all valid commands.\nQUIT - Exit the program.";
+            cout << "\nYour command words are:\nADD      - Manually create a new student.\nGENERATE - Randomly generate a given amount of students.\nDELETE   - Delete an existing student by ID.\nPRINT    - Print the data of all students.\nAVERAGE  - Calcuate the average GPA of all students.\nHELP     - Print all valid commands.\nQUIT     - Exit the program.";
         } else if (!strcmp(command, "QUIT")) { //quit the program
             continuing = false; //leave the main player loop
         } else { //give error message if the user typed something unacceptable
@@ -265,7 +266,7 @@ int main() {
     }
 
     //says bye
-    cout <<"\nHHHHHHHHHHHHHHHHHHH\n";
+    cout <<"\nPeace out.\n";
 
     //deletes all the nodes for good practice, iterates until the node is null meaning they're all deleted and goes to the stored next node at the end of each iteration
 

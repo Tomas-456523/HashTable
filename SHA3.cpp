@@ -33,7 +33,7 @@ namespace SHA3 {
     };
     //used during the iota step, each keccak round uses a different one, which is xor'd into the first item in state. The constants were generated to look random and they're standardized so they're what every SHA-3 uses 
     static const uint64_t iotaConstants[24] = {
-        0x0000000000000001ULL, 0x0000000000008082ULL,
+        0x0000000000000001ULL, 0x0000000000008082ULL, //ULL means Unsigned Long Long
         0x800000000000808AULL, 0x8000000080008000ULL,
         0x000000000000808BULL, 0x0000000080000001ULL,
         0x8000000080008081ULL, 0x8000000000008009ULL,
@@ -46,6 +46,8 @@ namespace SHA3 {
         0x8000000080008081ULL, 0x8000000000008080ULL,
         0x0000000080000001ULL, 0x8000000080008008ULL
     };
+    //the rate used by SHA-3 256 is standardized as 136. If I ever wanted to change SHA-3s I need to change the rate here
+    static constexpr size_t RATE = 136;
     //keccak the given state array (pronounced ketch-ak), done in 5 greek letter steps: THETA, RHO, PI, CHI, and IOTA, and we do that 24 times
     void KeccakIt(uint64_t state[25]) {
         for (int round = 0; round < 24; round++) {
@@ -82,16 +84,52 @@ namespace SHA3 {
             state[0] ^= iotaConstants[round];
         }
     }
-    void Absorb(uint64_t state[25], const uint8_t* data, size_t dataSize) {
-        
+    //absorbs the input into state in RATE-sized blocks and runs each block through Keccak
+    void Absorb(uint64_t state[25], const uint8_t* input, size_t inputSize) {
+        //reinterpret state as a bytes object so we can modify the bits of state
+        uint8_t* stateBytes = reinterpret_cast<uint8_t*>(state);
+        //while the input is able to be divided into RATE-sized blocks without padding
+        while (inputSize >= RATE) { //technically this program just skips this loop since I just input 4-byte ints but I included this check in case I ever wanted to use it for something else
+            for (size_t i = 0; i < RATE; i++) { //xor the next RATE bytes of input into state
+                stateBytes[i] ^= input[i];
+            } //do the whole Keccak process with the newly updated state
+            KeccakIt(state);
+            input += RATE; //moves the pointer forward because we don't need to read the data again
+            inputSize -= RATE; //removes RATE amount from the input size so at the end we know how much input is left to process
+        } //the last block of data left to process, we put it into a RATE-sized block of 0s
+        uint8_t end[RATE] = {0};
+        memcpy(end, input, inputSize); //put the remaining input into the end block
+        //standardized padding; 6 after the remaining input and 128 at the end
+        end[inputSize] = 6;
+        end[RATE-1] |= 128; //we or it into end to account for the edge case where inputSize == RATE - 1, so the 128 doesn't just overwrite the 6
+        for (size_t i = 0; i < RATE; i++) { //xor the last block into state
+            stateBytes[i] ^= end[i];
+        } //normally there would be a final KeccakIt(state) here but I moved it to Squeeze
     }
-    void Squeeze(uint64_t state[25], uint32_t* output, size_t outputSize) {
+    //squeezes the output from state
+    void Squeeze(uint64_t state[25], uint8_t* output, size_t outputSize) {
+        //reinterpret state as a bytes object so we can deal with the specific bits rather than pesky 64-bit 8-byte integers
+        uint8_t* stateBytes = reinterpret_cast<uint8_t*>(state);
 
+        //while we still need to write more output
+        while (outputSize > 0) {
+            KeccakIt(state); //Keccak the last block from Absorb on the first go, or to extract different bytes from the sponge on the subsequent goes
+            //if we don't have at least RATE bytes left to output, we only check the remaining outputSize bytes. Otherwise, we keep adding to the output in RATE-sized blocks
+            size_t blockSize = (outputSize < RATE) ? outputSize : RATE;
+            //copy the next blockSize bytes into the output from state
+            memcpy(output, stateBytes, blockSize);
+            outputSize -= blockSize; //subtract from outputSize so we know how many bytes we still need to output
+            output += blockSize; //moves the output pointer forward so we keep writing output in the next loop where we left off in this loop
+        }
     }
-    size_t Hash(const int& input, size_t tablen) { //tablen = table len, length of hash table, starts at 100 and doubles when too many collisions
-        uint64_t state[25] = {0};
-        Absorb(state, (uint8_t*)&input, sizeof(input));
-
-        return size_t(0);
+    //creates a 256-bit 32-byte hash stored as a string using the inputted integer
+    string Hash(const int input) {
+        uint64_t state[25] = {0}; //creates the state array which will be used to process the input
+        //absorb the state into the "sponge", using the data from the input which is byte-ified
+        Absorb(state, reinterpret_cast<const uint8_t*>(&input), sizeof(input));
+        string hash(32, '\0'); //creates the container for the hash bytes, SHA-3 256 creates a 32-byte hash so we make sure the string is that length
+        //extract the hash from the sponge into the hash string (which is byte-ified to allow for the modification of the individual bits)
+        Squeeze(state, reinterpret_cast<uint8_t*>(&hash[0]), hash.size());
+        return hash; //return the generated hash! lets goooooooooooooooooooooooooooooo
     }
 }
