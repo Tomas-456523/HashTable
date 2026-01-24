@@ -4,6 +4,9 @@
 *  used is SHA-3. The user can ADD a new student, which will be added to the list in increasing ID order. You can DELETE
 *  the student, and PRINT all the students' data. You can also print the AVERAGE of all their GPAs, ask for HELP to print
 *  all the valid commands, or QUIT the program.
+*
+*  Hash tables are efficient because you don't have to iterate across every student to check if they have the right ID,
+*  you just plug in the name and it gives you the index!
 */
 
 #include <iostream>
@@ -251,7 +254,7 @@ int main() {
         } else if (!strcmp(command, "AVERAGE")) { //print average gpa of all students
             average(first);
         } else if (!strcmp(command, "HELP")) { //print all valid command words
-            cout << "\nYour command words are:\nADD\nDELETE\nPRINT\nAVERAGE\nHELP\nQUIT";
+            cout << "\nYour command words are:\nADD - Manually create a new student.\nGENERATE - Randomly generate a given amount of students.\nDELETE - Delete an existing student by ID.\nPRINT - Print the data of all students.\nAVERAGE - Calcuate the average GPA of all students.\nHELP - Print all valid commands.\nQUIT - Exit the program.";
         } else if (!strcmp(command, "QUIT")) { //quit the program
             continuing = false; //leave the main player loop
         } else { //give error message if the user typed something unacceptable
@@ -264,7 +267,7 @@ int main() {
     //says bye
     cout <<"\nHHHHHHHHHHHHHHHHHHH\n";
 
-    //deletes all the code for good practice, iterates until the node is null meaning they're all deleted and goes to the stored next node at the end of each iteration
+    //deletes all the nodes for good practice, iterates until the node is null meaning they're all deleted and goes to the stored next node at the end of each iteration
 
     Node* next = NULL; //stores the next node temporarily so we can delete the current one
     for (; first != NULL; first = next) { //this is the same as using a while loop but it looks cooler :)

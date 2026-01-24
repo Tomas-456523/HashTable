@@ -158,3 +158,8 @@ Nitro
 Bros. Jr.
 Dent
 Norris
+Rotation
+Smith
+Wilson
+Roberts
+Wright
