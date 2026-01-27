@@ -1,5 +1,5 @@
 /* Tomas Carranza Echaniz
-*  1/22/2026
+*  1/26/2026
 *  This program is a student database that uses a hash table which handles collisions using chaining. The hash algorithm
 *  used is SHA-3. The user can ADD a new student, which will be added to the list in increasing ID order. You can DELETE
 *  the student, and PRINT all the students' data. You can also print the AVERAGE of all their GPAs, ask for HELP to print
@@ -18,7 +18,6 @@
 #include "Node.h"
 #include "SHA3.h"
 using namespace std;
-using namespace SHA3;
 
 //for ignoring faulty input and extra characters, functionality taken from my previous projects
 void CinIgnoreAll(bool force = false) {
@@ -36,7 +35,7 @@ void AllCaps(char* word) {
 }
 
 //for getting the id of a student since that happens twice
-int getID() {
+int makeID() {
     int id = 0;
     while (true) {
         cout << "\n> ";
@@ -50,6 +49,21 @@ int getID() {
         CinIgnoreAll(); //removes the newline character or invalid input
     }
 }
+
+//checks the table for if it's empty based on if it's all NULL nodes
+bool getEmpty(Node** table, size_t tablelen) {
+    for (int i = 0; i < tablelen; i++) { //iterates through the table, returns false, table is not empty, upon reaching a non-NULL node
+        if (table[i] != NULL) {
+            return false;
+        }
+    } //return true, table is empty, if no non-NULL nodes were found
+    return true;
+}
+
+/*void placeNode(Node** table, Node* node) {
+    for (; node->getNext() != NULL; node = node->getNext());
+    node->setNext();
+}*/
 
 //creates a new student and a new node pointing to it, needs start of linked list as input so we can make sure to not repeat IDs, as that would lead to annoying behavior, such as needing to delete the first one before being able to delete the second one that uses that ID
 Node* createStudent(Node* start) {
@@ -92,8 +106,8 @@ Node* createStudent(Node* start) {
     cout << "\nEnter " << firstname << "'s student ID.";
     continuing = true; //continues until valid input is given
     while (continuing) {
-        id = getID(); //gets the id using the already established id getting function, "\n> " is provided there
-        continuing = false; //assumes valid input to start since getID can return no faulty input
+        id = makeID(); //gets the id using the already established id getting function, "\n> " is provided there
+        continuing = false; //assumes valid input to start since makeID can return no faulty input
         //iterates through the linked list using current which starts at starts and goes to the next one each iteration until it meets a null node, that being the end
         for (Node* current = start; current != NULL; current = current->getNext()) { //in order to check if the currently considered ID is taken for reasons stated above the createStudent function
             if (current->getStudent()->getID() == id) { //if the IDs match that's bad
@@ -121,7 +135,7 @@ Node* createStudent(Node* start) {
     //creates a new student using the given data
     Student* student = new Student(&firstname[0], &lastname[0], id, gpa);
     //create and return a new node pointing to the new student
-    return new Node(student);
+    return NULL; /*new Node(student);*/
 }
 
 //creates a new student node and adds it into the linked list according to increasing id order
@@ -174,7 +188,7 @@ Node* deleteNode(Node*& current, int id = 0, bool first = 0) {
     }
     if (first) { //get the id if it's the first student so we know who to delete
         cout << "\nEnter ID of student to delete.";
-        id = getID();
+        id = makeID();
     }
     
     //if the current student node has the needed id, we found something to delete!
@@ -199,37 +213,40 @@ Node* deleteNode(Node*& current, int id = 0, bool first = 0) {
 }
 
 //prints the average gpa of all the students
-void average(Node* current, float sum = 0, int count = 0) {
-    if (current == NULL) { //return if there are no students left
-        if (!count) { //print error if the first node is null, meaning there are no students with GPAs to average
-            cout << "\nThere are no students with GPAs to average. (type ADD for add)";
-        } else { //print the sum over the count (average formula) with up to two decimal points of precision
-            cout << "\nAverage GPA: " << fixed << setprecision(2) << sum / count;
+void average(Node** table, size_t tablelen) {
+    double sum = 0; //the sum of all gpas, double for extra precision in case we have like a million students
+    int count = 0; //how many students in table
+    for (size_t i = 0; i < tablelen; i++) { //iterates through table indices
+        for (Node* current = table[i]; current != NULL; current = current->getNext()) { //starting at the current node, iterates through the chain until it reaches the NULL end
+            sum += current->getStudent()->getGPA(); //add the gpa to the sum total
+            count++; //increment the count because there's one more student to count
         }
+    }
+    if (!count) { //if we didn't find anyone, we give error message and return
+        cout << "\nThere are no students with GPAs to average. (type ADD for add)";
         return;
-    } //gets the node's student for easier variable getting
-    Student* student = current->getStudent();
-    average(current->getNext(), sum+student->getGPA(), count+1);
+    } //print the average gpa to two decimals of precision
+    cout << "\nAverage GPA: " << fixed << setprecision(2) << sum / count;
 }
 
-//print all the students' data
-void printAll(Node* current, bool first = false) {
-    if (current == NULL) { //return if we ran out of students to print
-        if (first) { //print error message if there are no students to print
-            cout << "\nThere are no students to print. (type ADD for add)";
-        }
+//print all the students' data by iterating through the table and iterating through any chains it finds
+void printAll(Node** table, size_t tablelen) {
+    if (getEmpty(table, tablelen)) { //check if there's any students to print
+        cout << "\nThere are no students to print."; //if not, error and return
         return;
-    } else if (first) {
-        cout << "\nStudents:";
-    } //print the current student and continue onto the next student
-    printStudent(current->getStudent());
-    printAll(current->getNext());
+    }
+    cout << "\nStudents:";
+    for (size_t i = 0; i < tablelen; i++) { //iterates through table indices
+        for (Node* current = table[i]; current != NULL; current = current->getNext()) { //starting at the current node, iterates through the chain until it reaches the NULL end
+            printStudent(current->getStudent()); //prints the current student data
+        }
+    }
 }
 
-//the main player loop
+//the main loop
 int main() {
-    Node* table[100] = {NULL}; //the hash table of linked lists
-    Node* first = NULL; //im keeping this until i readjust everything
+    size_t tableLen = 100; //the length of the hash table which gets doubled when 3+ collisions happen on the same index
+    Node** table = new Node*[tableLen](); //the hash table of linked lists
 
     //welcome message with instructions
     cout << "\nHello I am Harry the hash table!\nI am managing a database of students.\nType HELP for help.\n\nThere are currently no students. (type ADD for add)";
@@ -247,13 +264,15 @@ int main() {
         
         //calls function corresponding to the given command word
         if (!strcmp(command, "ADD")) { //add student
-            addNode(first);
-        } else if (!strcmp(command, "DELETE")) { //delete current student
-            deleteNode(first, 0, true);
+            addNode(table);
+        } else if (!strcmp(command, "GENERATE")) { //randomly generate new student(s)
+
+        } else if (!strcmp(command, "DELETE")) { //delete student
+            deleteNode(table, 0, true);
         } else if (!strcmp(command, "PRINT")) { //print all students
-            printAll(first, true);
+            printAll(table, tableLen);
         } else if (!strcmp(command, "AVERAGE")) { //print average gpa of all students
-            average(first);
+            average(table);
         } else if (!strcmp(command, "HELP")) { //print all valid command words
             cout << "\nYour command words are:\nADD      - Manually create a new student.\nGENERATE - Randomly generate a given amount of students.\nDELETE   - Delete an existing student by ID.\nPRINT    - Print the data of all students.\nAVERAGE  - Calcuate the average GPA of all students.\nHELP     - Print all valid commands.\nQUIT     - Exit the program.";
         } else if (!strcmp(command, "QUIT")) { //quit the program
@@ -268,11 +287,14 @@ int main() {
     //says bye
     cout <<"\nPeace out.\n";
 
+    //IMPLEMENT THIS LATER
     //deletes all the nodes for good practice, iterates until the node is null meaning they're all deleted and goes to the stored next node at the end of each iteration
 
-    Node* next = NULL; //stores the next node temporarily so we can delete the current one
+    /*Node* next = NULL; //stores the next node temporarily so we can delete the current one
     for (; first != NULL; first = next) { //this is the same as using a while loop but it looks cooler :)
         next = first->getNext(); //go to the next one
         delete first; //deletes the node
-    }
+    }*/
+
+    delete[] table;
 }

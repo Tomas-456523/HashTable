@@ -2,10 +2,12 @@
 
 #include "Node.h" //must have node and student files
 #include "Student.h"
+using namespace std;
 
-Node::Node(Student* _student) { //create the node and assign it the given student
+Node::Node(Student* _student, const string& _hash) { //create the node and assign it the given student and hash based on the student's ID
     student = _student;
-    nextNode = 0; //next node starts as 0 which is equal to NULL except NULL requires #including stuff  
+    hash = _hash;
+    nextNode = NULL;
 }
 void Node::setNext(Node* next) { //set the node that goes after this one
     nextNode = next;
