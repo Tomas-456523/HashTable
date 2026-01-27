@@ -167,3 +167,6 @@ Spoon
 River
 Plate
 Krogstad
+Dedede
+Doe
+Karpov

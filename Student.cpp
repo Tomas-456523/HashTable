@@ -1,15 +1,16 @@
 //implementation file for students
 
 #include "Student.h"
-#include <cstring> //needs cstring for strcpying the names
+#include <string>
+using namespace std;
 
-Student::Student(char* firstname, char* lastname, int _id, float _gpa) { //constructs the student and sets all the data according to the given data
-    strcpy(firstName, firstname);
-    strcpy(lastName, lastname);
+Student::Student(string& firstname, string& lastname, int _id, float _gpa) { //constructs the student and sets all the data according to the given data
+    firstName = firstname;
+    lastName = lastname;
     id = _id;
     gpa = _gpa;
 }
-char* Student::getName(int which) { //returns the first name if 0 was passed, or last if any other int was given
+string& Student::getName(int which) { //returns the first name if 0 was passed, or last if any other int was given
     if (!which) { //!0 == !false == true, so return the first name
         return firstName;
     } //otherwise return the last name

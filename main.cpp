@@ -34,17 +34,22 @@ void AllCaps(char* word) {
     }
 }
 
-//for getting the id of a student since that happens twice
-int makeID() {
-    int id = 0;
+//for getting an integer from the player, ususally the id of a student
+int makeNum(bool id = true) { //id bool is for giving id error or normal error
+    int num = 0;
     while (true) {
         cout << "\n> ";
-        cin >> id; //gets the id integer
-        if (cin) { //return the id and end the loop if input was valid
+        cin >> num; //gets the integer
+        if (cin) { //return the number and end the loop if input was valid
             CinIgnoreAll(true); //removes the newline character after valid integer input
-            return id;
+            return num;
         } else { //otherwise give error message and try again
-            cout << "\nID must be an integer.";
+            if (id) { //id-specific error "\nID must be an integer."
+                cout << "\nID m";
+            } else { //generic integer error "\nMust be an integer."
+                cout << "\nM";
+            }
+            cout << "ust be an integer.";
         }
         CinIgnoreAll(); //removes the newline character or invalid input
     }
@@ -60,64 +65,53 @@ bool getEmpty(Node** table, size_t tablelen) {
     return true;
 }
 
+//get an index in the hash table based on the given hash and table length
+size_t deHash(const string& hash, size_t tablelen) {
+    size_t index; //create an index and write as much data from the hash into the index as possible
+    memcpy(&index, &hash[0], sizeof(size_t));
+    return index % tablelen; //modulo the index based on tablelen to stay within bounds and return that
+}
+
 /*void placeNode(Node** table, Node* node) {
     for (; node->getNext() != NULL; node = node->getNext());
     node->setNext();
 }*/
 
-//creates a new student and a new node pointing to it, needs start of linked list as input so we can make sure to not repeat IDs, as that would lead to annoying behavior, such as needing to delete the first one before being able to delete the second one that uses that ID
-Node* createStudent(Node* start) {
-    char firstname[255];
-    char lastname[255];
+//creates a new student and a new node pointing to it, needs the table as input so we can make sure to not repeat IDs, because that would cause infinite rehashing (since upon reaching 3 collisisons, the same 4 nodes would be rehashed into the same bucket again)
+Node* createStudent(Node** table, size_t tablelen) {
+    string firstname;
+    string lastname;
     int id;
     float gpa;
 
     //get the student's first (and middle if applicable) names
     cout << "\nEnter first (and middle) name for new student.";
-    bool continuing = true; //continues until valid input is given
-    while (continuing) {
-        cout << "\n> ";
-        cin.getline(firstname, 255);
-        if (cin) { //end loop if input was valid
-            continuing = false;
-        }
-        else { //error message
-            cout << "\nInput too long.";
-        }
-        CinIgnoreAll(); //clear any faulty or extra input given
-    }
+    getline(cin, firstname);
 
     ///get the student's last name(s)
     cout << "\nEnter last name(s) for new student.";
-    continuing = true; //continues until valid input is given
-    while (continuing) {
-        cout << "\n> ";
-        cin.getline(lastname, 255);
-        if (cin) { //end loop if input was valid
-            continuing = false;
-        }
-        else { //error message
-            cout << "\nInput too long.";
-        }
-        CinIgnoreAll(); //clear any faulty or extra input given
-    }
+    getline(cin, lastname);
 
-    //get the student's id
+    //get the student's ID
     cout << "\nEnter " << firstname << "'s student ID.";
     continuing = true; //continues until valid input is given
     while (continuing) {
-        id = makeID(); //gets the id using the already established id getting function, "\n> " is provided there
-        continuing = false; //assumes valid input to start since makeID can return no faulty input
-        //iterates through the linked list using current which starts at starts and goes to the next one each iteration until it meets a null node, that being the end
-        for (Node* current = start; current != NULL; current = current->getNext()) { //in order to check if the currently considered ID is taken for reasons stated above the createStudent function
+        id = makeNum(); //gets the ID using the number getting function, "\n> " is provided there
+        continuing = false; //assumes valid input to start since makeNum doesn't return faulty input
+        size_t i = deHash(SHA3::Hash(id), tablelen); //gets the index that the given ID would be placed at
+
+        //iterates through the chain at index i and goes to the next one each iteration until it meets a null node, that being the end
+        for (Node* current = table[i]; current != NULL; current = current->getNext()) { //in order to check if the currently considered ID is taken for reasons stated above the createStudent function
             if (current->getStudent()->getID() == id) { //if the IDs match that's bad
                 continuing = true; //we keep continuing and get a new ID from the user because the IDs conflict
-                cout << "\nID " << id << " is taken by " << current->getStudent()->getName(0) << "."; //error message; shows who is causing the conflict
+                Student* student = current->getStudent(); //get the student so we don't getStudent() twice
+                cout << "\nID " << id << " is taken by " << student->getName(0) << " " << student->getName(1) << "."; //error message; shows who is causing the conflict
                 break; //break since we know there's a conflict alredy so more checks would waste valuable time
             }
         }
     }
 
+    //get the student's gpa
     cout << "\nEnter " << firstname << "'s GPA.";
     continuing = true; //continues until valid input is given
     while (continuing) {
@@ -133,9 +127,9 @@ Node* createStudent(Node* start) {
     }
 
     //creates a new student using the given data
-    Student* student = new Student(&firstname[0], &lastname[0], id, gpa);
+    Student* student = new Student(firstname, lastname, id, gpa);
     //create and return a new node pointing to the new student
-    return NULL; /*new Node(student);*/
+    return new Node(student);
 }
 
 //creates a new student node and adds it into the linked list according to increasing id order
@@ -176,40 +170,29 @@ void printStudent(Student* student, bool newline = true) {
     cout << student->getName(0) << " " << student->getName(1) << " (" << student->getID() << ") - GPA of " << fixed << setprecision(2) << student->getGPA();
 }
 
-//deletes the current node, and returns the node after the given one in order to bridge the gap created as a result (we need to pass by reference so we can nullify it from here)
-Node* deleteNode(Node*& current, int id = 0, bool first = 0) {
-    if (current == NULL) { //return if we ran out of students
-        if (first) { //if it's the first one that means there is actually literally nobody to delete
-            cout << "\nThere are no students to delete. (type ADD for add)";
-        } else { //if it's not the first check, this is after the last node and there were no matching students along the way
-            cout << "\nThere are no students with ID " << id << ".";
-        }
-        return NULL;
-    }
-    if (first) { //get the id if it's the first student so we know who to delete
-        cout << "\nEnter ID of student to delete.";
-        id = makeID();
-    }
-    
-    //if the current student node has the needed id, we found something to delete!
-    if (current->getStudent()->getID() == id) {
-        cout << "\nSuccessfully deleted " << current->getStudent()->getName(0) << "!"; //success message
-        Node* next = current->getNext(); //stores next in case we delete current so we can access it in that situation
-        delete current; //does the deleting
-        if (first) { //update current node if it's the first one so int main is updated since the first node is there as well
-            current = next;
-        }
-        return next; //return the next node so we can relink the list in case of successful deletion
-    } else {
-        Node* next = current->getNext(); //I have to define next first for same reasons as when calling next recursive call in addNode
-        current->setNext(deleteNode(next, id)); //sets next to whatever the next recursive call returns, usually the next node again
-    }
+//uses id to find and delete a node in the hash table
+void deleteNode(Node** table, size_t tablelen) {
+    cout << "\nEnter ID of student to delete.";
+    int id = makeNum(); //gets the ID from the player to search for
+    size_t index = deHash(SHA3::Hash(id), tablelen); //creates a hash based on the ID and immediately dehashes it to get an index to start searching in
 
-    if (first && current == NULL) { //prints if we have deleted the last student in the database
-        cout << "\nThere are no students left.";
-    }
-
-    return current;
+    Node* previous = NULL; //we store the previous node so we can bridge the gap created by deleting middle or end nodes
+    //check the chain starting from the index position in the table, continue until going off the end of the chain (entering NULL territory)
+    for (Node* current = table[index]; current != NULL; current = current->getNext()) {
+        if (current->getStudent()->getID() == id) { //delete the node if its student's ID matches
+            if (current == table[index]) { //if it's the first one in the chain, update the table in main() by bringing the next node into the table at the index
+                table[index] = current->getNext();
+            } else { //if it's the middle or end one, bridge the gap by setting previous's next to the deleted node's next (1 -> 2 -> 3)  ==>  (1 ->   -> 3)  ==>  (1 -> 3)
+                previous->setNext(current->getNext());
+            }
+            Student* student = current->getStudent(); //avoids extra student getting
+            cout << "\nDeleted " << student->getName(0) << " " << student->getName(1) << "."; //deletion success text!
+            delete current; //deletes the student
+            return; //returns because there's nothing else to do here
+        }
+        previous = current; //updates previous, because the next current's previous is going to be current
+    } //error, no student with ID id found
+    cout << "\nNo student found with ID " << id << ".";
 }
 
 //prints the average gpa of all the students
@@ -246,7 +229,7 @@ void printAll(Node** table, size_t tablelen) {
 //the main loop
 int main() {
     size_t tableLen = 100; //the length of the hash table which gets doubled when 3+ collisions happen on the same index
-    Node** table = new Node*[tableLen](); //the hash table of linked lists
+    Node** table = new Node*[tableLen](); //the hash table of linked list chains
 
     //welcome message with instructions
     cout << "\nHello I am Harry the hash table!\nI am managing a database of students.\nType HELP for help.\n\nThere are currently no students. (type ADD for add)";
@@ -264,15 +247,15 @@ int main() {
         
         //calls function corresponding to the given command word
         if (!strcmp(command, "ADD")) { //add student
-            addNode(table);
+            addNode(table, tableLen);
         } else if (!strcmp(command, "GENERATE")) { //randomly generate new student(s)
 
         } else if (!strcmp(command, "DELETE")) { //delete student
-            deleteNode(table, 0, true);
+            deleteNode(table, tableLen);
         } else if (!strcmp(command, "PRINT")) { //print all students
             printAll(table, tableLen);
         } else if (!strcmp(command, "AVERAGE")) { //print average gpa of all students
-            average(table);
+            average(table, tableLen);
         } else if (!strcmp(command, "HELP")) { //print all valid command words
             cout << "\nYour command words are:\nADD      - Manually create a new student.\nGENERATE - Randomly generate a given amount of students.\nDELETE   - Delete an existing student by ID.\nPRINT    - Print the data of all students.\nAVERAGE  - Calcuate the average GPA of all students.\nHELP     - Print all valid commands.\nQUIT     - Exit the program.";
         } else if (!strcmp(command, "QUIT")) { //quit the program
@@ -287,14 +270,14 @@ int main() {
     //says bye
     cout <<"\nPeace out.\n";
 
-    //IMPLEMENT THIS LATER
-    //deletes all the nodes for good practice, iterates until the node is null meaning they're all deleted and goes to the stored next node at the end of each iteration
+    //deletes all the nodes for good practice, iterates through the table and from there iterates through the individual chains
+    for (size_t i = 0; i < tableLen; i++) {
+        Node* next = NULL; //stores the next node temporarily so we can delete the current one
+        for (Node* current = table[i]; current != NULL; current = next) { //starts at the first node in bucket i and iterates through until the end of the chain
+            next = current->getNext(); //go to the next node
+            delete current; //deletes the node
+        }
+    }
 
-    /*Node* next = NULL; //stores the next node temporarily so we can delete the current one
-    for (; first != NULL; first = next) { //this is the same as using a while loop but it looks cooler :)
-        next = first->getNext(); //go to the next one
-        delete first; //deletes the node
-    }*/
-
-    delete[] table;
+    delete[] table; //deletes the table structure itself
 }
