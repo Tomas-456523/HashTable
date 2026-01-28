@@ -72,17 +72,28 @@ bool getEmpty(Node** table, size_t tablelen) {
 
 //get an index in the hash table based on the given hash and table length
 size_t deHash(const string& hash, size_t tablelen) {
-    size_t index; //create an index and write as much data from the hash into the index as possible
-    memcpy(&index, &hash[0], sizeof(size_t));
+    size_t index; //create an index
+    memcpy(&index, &hash[0], sizeof(size_t)); //write as much data from the hash into the index as possible
     return index % tablelen; //modulo the index based on tablelen to stay within bounds and return that
 }
 
-//return true if we need to rehash
-/*bool placeNode(Node** table, Node* node) {
-    for (; node->getNext() != NULL; node = node->getNext());
-    node->setNext();
-}*/
+//place the node into the hash table at the given index and return true if we need to rehash, based on chain length
+bool placeNode(Node* node, Node** table, size_t index) {
+    if (table[index] == NULL) { //if the bucket at the given index is empty, we just tell the table in main the node goes here
+        table[index] = node;
+        return false; //no need to rehash because the chain length is 1 guaranteed!
+    }
+    Node* current = table[index]; //finds the beginning node
+    int chainlen = 1; //how long the chain is
+    for (; current->getNext() != NULL;) { //iterate through the chain until we reach the last node
+        current = current->getNext(); //go to the next node
+        chainlen++; //increment the chain length since we checked one more node
+    }
+    current->setNext(node); //places the node after the previous last node
+    return chainlen > 3; //if the chain length exceeds 3, we say to rehash
+}
 
+//double the table size and rearrange all the nodes in into new buckets, when we exceed the maximum chain length of 3
 void reHash(Node**& table, size_t& tablelen) {
     vector<Node*> nodes; //vector of all nodes which they're chucked into until they're all rehashed
     for (size_t i = 0; i < tablelen; i++) { //iterates through table indices
@@ -102,18 +113,7 @@ void reHash(Node**& table, size_t& tablelen) {
         continuing = false;
         for (Node* node : nodes) {
             size_t i = deHash(node->getHash(), tablelen); //gets the index based on the hash
-            int chainlen = 1;
-            if (table[i] == NULL) {
-                table[i] = node;
-                continue;
-            }
-            for (Node* current = table[i]; current != NULL; current = current->getNext()) {
-                if (current->getNext() == NULL) {
-                    current->setNext(node);
-                }
-                chainlen++;
-            }
-            if (chainlen > 3) {
+            if (placeNode(node, table, i)) {
                 continuing = true;
                 break;
             }
@@ -133,7 +133,7 @@ void readTxtData(const string& file, vector<string>& lines) { //needs the name o
 }
 
 //takes the two names vectors and reads the associated files into them, (item in vector = line in file)
-void loadNames(vector<string>& firstnames, vector<string>& lastnames) {
+void loadNames(vector<string>& firstnames, vector<string>& lastnames, bool initial = false) {
     readTxtData("firstnames.txt", firstnames); //reads the files into their corresponding vectors
     readTxtData("lastnames.txt", lastnames);
     bool faulty1 = firstnames.empty(); //gives errors if the vectors are empty for whatever reason
@@ -144,6 +144,8 @@ void loadNames(vector<string>& firstnames, vector<string>& lastnames) {
         cout << "\nList of first names empty. GENERATE command disabled.";
     } else if (faulty2) { //last names faulty
         cout << "\nList of last names empty. GENERATE command disabled.";
+    } else if (!initial) { //otherwise, success text! (unless it's the first one, because that runs without player input, so they don't need to know)
+        cout << "\nSuccessfully reloaded first and last name lists!";
     }
 }
 
@@ -155,11 +157,11 @@ Node* createStudent(Node** table, size_t tablelen) {
     float gpa;
 
     //get the student's first (and middle if applicable) names
-    cout << "\nEnter first (and middle) name for new student.";
+    cout << "\nEnter first (and middle) name for new student.\n> ";
     getline(cin, firstname);
 
     //get the student's last name(s)
-    cout << "\nEnter last name(s) for new student.";
+    cout << "\nEnter last name(s) for new student.\n> ";
     getline(cin, lastname);
 
     //get the student's ID
@@ -203,25 +205,21 @@ Node* createStudent(Node** table, size_t tablelen) {
 }
 
 //pseudorandomly generate a student using the name files, the stored genID, and a GPA between 0 and 4.5
-void generateStudent(Node** table, size_t tablelen, vector<string>& firstnames, vector<string>& lastnames, int& genID) {
-    if (!firstnames.size() || !lastnames.size()) {
-        cout << "\nNo valid names available; can't generate students.";
-        return;
-    }
-
+void generateStudent(Node**& table, size_t& tablelen, vector<string>& firstnames, vector<string>& lastnames, int& genID) {
     string firstname = firstnames[rand()%firstnames.size()]; //use the lists to choose one of each type of name
     string lastname = lastnames[rand()%lastnames.size()];
 
     int id; //the ID this student will have, we get it by incrementing genID until we find an unused ID
+    size_t index; //the bucket of the hash table the student will be placed into
 
     bool continuing = true; //continues until valid ID is found
     while (continuing) {
         id = genID++; //gets the next ID and then increments it (the one in main())
         continuing = false; //assumes valid ID to start
-        size_t i = deHash(SHA3::Hash(id), tablelen); //gets the index that the given ID would be placed at
+        index = deHash(SHA3::Hash(id), tablelen); //gets the index that the given ID would be placed at
 
         //iterates through the chain at index i and goes to the next one each iteration until it meets a null node, that being the end
-        for (Node* current = table[i]; current != NULL; current = current->getNext()) { //in order to check if the currently considered ID is taken for reasons stated above the createStudent function
+        for (Node* current = table[index]; current != NULL; current = current->getNext()) { //in order to check if the currently considered ID is taken for reasons stated above the createStudent function
             if (current->getStudent()->getID() == id) { //if the IDs match that's bad
                 continuing = true; //we keep continuing and get a new ID because the IDs conflict
                 break; //break since we know there's a conflict alredy so more checks would waste valuable time
@@ -231,40 +229,46 @@ void generateStudent(Node** table, size_t tablelen, vector<string>& firstnames, 
 
     float gpa = (rand()%450)/100.0; //generates a random gpa between 0.0 and 4.5
 
-    //creates a new student using the generated data
+    //creates a new student and node using the generated data
     Student* student = new Student(firstname, lastname, id, gpa);
+    Node* node = new Node(student, SHA3::Hash(id));
     
-    //do something with the student
+    //place the student at the found index
+    if (placeNode(node, table, index)) { //if placeNode says we exceeded the chain length limit, we rehash!
+        reHash(table, tablelen);
+    }
+}
+
+// 
+void initGeneration(Node**& table, size_t& tablelen, vector<string>& firstnames, vector<string>& lastnames, int& genID) {
+    if (!firstnames.size() || !lastnames.size()) {
+        cout << "\nNo valid names available; can't generate students.";
+        return;
+    }
+    cout << "\nHow many students to generate?";
+    int amount = makeNum(false);
+    cout << "\n";
+    for (int i = 0; i < amount; i++) {
+        generateStudent(table, tablelen, firstnames, lastnames, genID);
+        cout << "\rProgress: " << i * 100.0 / amount << "%" << flush;
+    }
+    cout << "\rSuccessfully generated " << amount << " student";
+    if (amount != 1) {
+        cout << "s";
+    }
+    cout << "!";
 }
 
 //creates a new student node and adds it into the linked list according to increasing id order
-void addNode(Node*& current, Node* newguy = NULL) {
-    if (newguy == NULL) { //if we just called addNode, the person we're adding will be NULL so we must set them at the start
-        newguy = createStudent(current);
-        if (current != NULL && newguy->getStudent()->getID() < current->getStudent()->getID()) { //if the new student's id is less than the current first one, we put the new node at the start
-            newguy->setNext(current); //makes the new first node point to the old first node
-            current = newguy; //update main's starting node
-            cout << "\nSuccessfully added " << newguy->getStudent()->getName(0) << " before " << newguy->getNext()->getStudent()->getName(0) << "!"; //success message
-            return;
-        }
-    }
-    if (current == NULL) { //I always check the following node, so we will only reach this if we input a null node from main, meaning we have no nodes
-        current = newguy; //thus, we just set the node in main to the new student!
-    //if we're at the end of the linked list (meaning the next node is null), or the next one has a greater ID, meaning we're at the point where we can place the new node in proper ID order
-    } else if (current->getNext() == NULL || current->getNext()->getStudent()->getID() > newguy->getStudent()->getID()) {
-        newguy->setNext(current->getNext()); //since the new student will be the new next node, we make it point to the old next node
-        current->setNext(newguy); //make the node we're at point to the new next node
-    } else { //otherwise keep checking for a valid position; continue the loop!
-        Node* next = current->getNext(); //I can't just put this all in one line, I have to define this and then pass it into the next call, because getNext() returns a Node*, but I need to pass a Node*&, but I can't just pass a pointer I got from a function for that. "cannot bind non-const lvalue reference of type 'Node*&' to an rvalue of type 'Node*'"
-        addNode(next, newguy); //check the next node and carry over the new student's data
-        return; //returns because we didn't add the student yet
-    }
-    
-    cout << "\nSuccessfully added " << newguy->getStudent()->getName(0); //common beginning of success message
-    if (current != newguy) { //if it isn't the only node, we print which node we put it after (current)
-        cout << " after " << current->getStudent()->getName(0);
-    }
-    cout << "!"; //exclamation mark!
+void makeStudent(Node**& table, size_t& tablelen) {
+    Node* newguy = createStudent(table, tablelen);
+
+    size_t index = deHash(newguy->getHash(), tablelen);
+
+    if (placeNode(newguy, table, index)) {
+        reHash(table, tablelen);
+    } //success text!
+    cout << "\nSuccessfully created " << newguy->getStudent()->getName(0) << "!";
 }
 
 //prints the given student (with option to put the data in a new line)
@@ -272,7 +276,7 @@ void printStudent(Student* student, bool newline = true) {
     if (newline) { //prints the new line if we need to
         cout << "\n";
     } //prints all the student's data
-    cout << student->getName(0) << " " << student->getName(1) << " (" << student->getID() << ") - GPA of " << fixed << setprecision(2) << student->getGPA();
+    cout << student->getName(0) << " " << student->getName(1) << " (" << student->getID() << ") - GPA of " << student->getGPA();
 }
 
 //uses id to find and delete a node in the hash table
@@ -314,7 +318,7 @@ void average(Node** table, size_t tablelen) {
         cout << "\nThere are no students with GPAs to average. (type ADD for add)";
         return;
     } //print the average gpa to two decimals of precision
-    cout << "\nAverage GPA: " << fixed << setprecision(2) << sum / count;
+    cout << "\nAverage GPA: " << sum / count;
 }
 
 //print all the students' data by iterating through the table and iterating through any chains it finds
@@ -339,14 +343,14 @@ int main() {
     vector<string> firstNames; //the vectors of names that are used to pseudorandomly generate students
     vector<string> lastNames;
 
-    loadNames(firstNames, lastNames); //loads the names from the files "firstnames.txt" and "lastnames.txt"
-
     int genID = 1; //the ID used when randomly generating a student, gets incremented after every generation
 
     srand(time(NULL)); //seed the random number generation with the time, so the random student generation can use it
 
-    //welcome message with instructions
-    cout << "\nHello I am Harry the hash table!\nI am managing a database of students.\nType HELP for help.\n\nThere are currently no students. (type ADD for add)";
+    //welcome message with instructions, also sets float printings to 2 decimal points of precision
+    cout << "\nHello I am Harry the hash table!\nI am managing a database of students.\nType HELP for help." << fixed << setprecision(2);
+    loadNames(firstNames, lastNames, true); //loads the names from the files "firstnames.txt" and "lastnames.txt"
+    cout << "\n\nThere are currently no students. (type ADD for add)";
     
     string command; //the command that the user inputs into (now outside the loop! how exciting!)
     //continues until continuing is falsified (by typing QUIT)
@@ -360,9 +364,9 @@ int main() {
         
         //calls function corresponding to the given command word
         if (command == "ADD") { //add student
-            addNode(table, tableLen);
-        } else if (command, "GENERATE") { //randomly generate new student(s)
-            generateStudent(table, tableLen, firstNames, lastNames, genID);
+            makeStudent(table, tableLen);
+        } else if (command == "GENERATE") { //randomly generate new student(s)
+            initGeneration(table, tableLen, firstNames, lastNames, genID);
         } else if (command == "DELETE") { //delete student
             deleteNode(table, tableLen);
         } else if (command == "PRINT") { //print all students
