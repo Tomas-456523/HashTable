@@ -170,3 +170,6 @@ Krogstad
 Dedede
 Doe
 Karpov
+Princeton
+Kent
+Turing

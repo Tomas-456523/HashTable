@@ -1,6 +1,7 @@
 /* Tomas Carranza Echaniz
-*  1/26/2026
-*  This program is a student database that uses a hash table which handles collisions using chaining. The hash algorithm
+*  1/27/2026
+*  This program is a student database that uses a hash table which handles collisions using chaining. Chains have a maximum
+*  length of 3. When this is exceeded, the hash table length is doubled and all the nodes are rehashed. The hash algorithm
 *  used is SHA-3. The user can ADD a new student, which will be added to the list in increasing ID order. You can DELETE
 *  the student, and PRINT all the students' data. You can also print the AVERAGE of all their GPAs, ask for HELP to print
 *  all the valid commands, or QUIT the program.
@@ -14,6 +15,10 @@
 #include <cstring>
 #include <iomanip>
 #include <string>
+#include <fstream>
+#include <cstdlib>
+#include <ctime>
+#include <vector>
 #include "Student.h"
 #include "Node.h"
 #include "SHA3.h"
@@ -27,9 +32,9 @@ void CinIgnoreAll(bool force = false) {
     }
 }
 
-//capitalizes the given charray for easier command interpretation
-void AllCaps(char* word) {
-    for (int i = 0; i < strlen(word); i++) { //sets all the characters to a capitalized unsigned version of the char (unsigned because some systems sign the chars)
+//capitalizes the given string for easier command interpretation
+void AllCaps(string& word) {
+    for (size_t i = 0; i < word.size(); i++) { //sets all the characters to a capitalized unsigned version of the char (unsigned because some systems sign the chars)
         word[i] = toupper((unsigned char)word[i]);
     }
 }
@@ -72,10 +77,75 @@ size_t deHash(const string& hash, size_t tablelen) {
     return index % tablelen; //modulo the index based on tablelen to stay within bounds and return that
 }
 
-/*void placeNode(Node** table, Node* node) {
+//return true if we need to rehash
+/*bool placeNode(Node** table, Node* node) {
     for (; node->getNext() != NULL; node = node->getNext());
     node->setNext();
 }*/
+
+void reHash(Node**& table, size_t& tablelen) {
+    vector<Node*> nodes; //vector of all nodes which they're chucked into until they're all rehashed
+    for (size_t i = 0; i < tablelen; i++) { //iterates through table indices
+        for (Node* current = table[i]; current != NULL; current = current->getNext()) { //starting at the current node, iterates through the chain until it reaches the NULL end
+            nodes.push_back(current); //add the current node to the nodes vector
+        }
+    }
+
+    bool continuing = true;
+    while (continuing) {
+        delete[] table;
+        for (Node* node : nodes) {
+            node->setNext(NULL);
+        }
+        tablelen *= 2;
+        table = new Node*[tablelen](); //the hash table of linked list chains
+        continuing = false;
+        for (Node* node : nodes) {
+            size_t i = deHash(node->getHash(), tablelen); //gets the index based on the hash
+            int chainlen = 1;
+            if (table[i] == NULL) {
+                table[i] = node;
+                continue;
+            }
+            for (Node* current = table[i]; current != NULL; current = current->getNext()) {
+                if (current->getNext() == NULL) {
+                    current->setNext(node);
+                }
+                chainlen++;
+            }
+            if (chainlen > 3) {
+                continuing = true;
+                break;
+            }
+        }
+    }
+}
+
+//reads the data from a text file into a vector of strings (each line in the file is an item in the vector)
+void readTxtData(const string& file, vector<string>& lines) { //needs the name of the file and the vector to write into
+    lines.clear(); //removes any existing data from the given vector, so we don't just inflate it on every RELOAD
+    ifstream txt(file); //opens the file
+    if (!txt) { //says error message if we couldn't open the file for some reason
+        cout << "\nError encountered while opening " << file << ".";
+    } //no need to return because it just fails the for loop condition immediately and then the function ends anyway
+    //reads each line from txt and adds them to the vector of lines
+    for (string line; getline(txt, line); lines.push_back(line));
+}
+
+//takes the two names vectors and reads the associated files into them, (item in vector = line in file)
+void loadNames(vector<string>& firstnames, vector<string>& lastnames) {
+    readTxtData("firstnames.txt", firstnames); //reads the files into their corresponding vectors
+    readTxtData("lastnames.txt", lastnames);
+    bool faulty1 = firstnames.empty(); //gives errors if the vectors are empty for whatever reason
+    bool faulty2 = lastnames.empty();
+    if (faulty1 && faulty2) { //gives specific error, which one or if both files are faulty/empty
+        cout << "\nList of first and last names empty. GENERATE command disabled."; //both faulty
+    } else if (faulty1) { //first names faulty
+        cout << "\nList of first names empty. GENERATE command disabled.";
+    } else if (faulty2) { //last names faulty
+        cout << "\nList of last names empty. GENERATE command disabled.";
+    }
+}
 
 //creates a new student and a new node pointing to it, needs the table as input so we can make sure to not repeat IDs, because that would cause infinite rehashing (since upon reaching 3 collisisons, the same 4 nodes would be rehashed into the same bucket again)
 Node* createStudent(Node** table, size_t tablelen) {
@@ -88,13 +158,13 @@ Node* createStudent(Node** table, size_t tablelen) {
     cout << "\nEnter first (and middle) name for new student.";
     getline(cin, firstname);
 
-    ///get the student's last name(s)
+    //get the student's last name(s)
     cout << "\nEnter last name(s) for new student.";
     getline(cin, lastname);
 
     //get the student's ID
     cout << "\nEnter " << firstname << "'s student ID.";
-    continuing = true; //continues until valid input is given
+    bool continuing = true; //continues until valid input is given
     while (continuing) {
         id = makeNum(); //gets the ID using the number getting function, "\n> " is provided there
         continuing = false; //assumes valid input to start since makeNum doesn't return faulty input
@@ -128,8 +198,43 @@ Node* createStudent(Node** table, size_t tablelen) {
 
     //creates a new student using the given data
     Student* student = new Student(firstname, lastname, id, gpa);
-    //create and return a new node pointing to the new student
-    return new Node(student);
+    //create and return a new node pointing to the new student, featuring a hash generated using the ID
+    return new Node(student, SHA3::Hash(id));
+}
+
+//pseudorandomly generate a student using the name files, the stored genID, and a GPA between 0 and 4.5
+void generateStudent(Node** table, size_t tablelen, vector<string>& firstnames, vector<string>& lastnames, int& genID) {
+    if (!firstnames.size() || !lastnames.size()) {
+        cout << "\nNo valid names available; can't generate students.";
+        return;
+    }
+
+    string firstname = firstnames[rand()%firstnames.size()]; //use the lists to choose one of each type of name
+    string lastname = lastnames[rand()%lastnames.size()];
+
+    int id; //the ID this student will have, we get it by incrementing genID until we find an unused ID
+
+    bool continuing = true; //continues until valid ID is found
+    while (continuing) {
+        id = genID++; //gets the next ID and then increments it (the one in main())
+        continuing = false; //assumes valid ID to start
+        size_t i = deHash(SHA3::Hash(id), tablelen); //gets the index that the given ID would be placed at
+
+        //iterates through the chain at index i and goes to the next one each iteration until it meets a null node, that being the end
+        for (Node* current = table[i]; current != NULL; current = current->getNext()) { //in order to check if the currently considered ID is taken for reasons stated above the createStudent function
+            if (current->getStudent()->getID() == id) { //if the IDs match that's bad
+                continuing = true; //we keep continuing and get a new ID because the IDs conflict
+                break; //break since we know there's a conflict alredy so more checks would waste valuable time
+            }
+        }
+    }
+
+    float gpa = (rand()%450)/100.0; //generates a random gpa between 0.0 and 4.5
+
+    //creates a new student using the generated data
+    Student* student = new Student(firstname, lastname, id, gpa);
+    
+    //do something with the student
 }
 
 //creates a new student node and adds it into the linked list according to increasing id order
@@ -231,40 +336,48 @@ int main() {
     size_t tableLen = 100; //the length of the hash table which gets doubled when 3+ collisions happen on the same index
     Node** table = new Node*[tableLen](); //the hash table of linked list chains
 
+    vector<string> firstNames; //the vectors of names that are used to pseudorandomly generate students
+    vector<string> lastNames;
+
+    loadNames(firstNames, lastNames); //loads the names from the files "firstnames.txt" and "lastnames.txt"
+
+    int genID = 1; //the ID used when randomly generating a student, gets incremented after every generation
+
+    srand(time(NULL)); //seed the random number generation with the time, so the random student generation can use it
+
     //welcome message with instructions
     cout << "\nHello I am Harry the hash table!\nI am managing a database of students.\nType HELP for help.\n\nThere are currently no students. (type ADD for add)";
     
+    string command; //the command that the user inputs into (now outside the loop! how exciting!)
     //continues until continuing is falsified (by typing QUIT)
     bool continuing = true;
     while (continuing) {
-        char command[255]; //the command that the user inputs into
-        
         cout << "\n> "; //thing for the player to type after
         
-        cin.getline(command, 255); //gets the player input, up to 255 characters
+        getline(cin, command); //gets the player input, up to 255 characters
         
-        AllCaps(&command[0]); //capitalizes the command for easier interpretation
+        AllCaps(command); //capitalizes the command for easier interpretation
         
         //calls function corresponding to the given command word
-        if (!strcmp(command, "ADD")) { //add student
+        if (command == "ADD") { //add student
             addNode(table, tableLen);
-        } else if (!strcmp(command, "GENERATE")) { //randomly generate new student(s)
-
-        } else if (!strcmp(command, "DELETE")) { //delete student
+        } else if (command, "GENERATE") { //randomly generate new student(s)
+            generateStudent(table, tableLen, firstNames, lastNames, genID);
+        } else if (command == "DELETE") { //delete student
             deleteNode(table, tableLen);
-        } else if (!strcmp(command, "PRINT")) { //print all students
+        } else if (command == "PRINT") { //print all students
             printAll(table, tableLen);
-        } else if (!strcmp(command, "AVERAGE")) { //print average gpa of all students
+        } else if (command == "AVERAGE") { //print average gpa of all students
             average(table, tableLen);
-        } else if (!strcmp(command, "HELP")) { //print all valid command words
-            cout << "\nYour command words are:\nADD      - Manually create a new student.\nGENERATE - Randomly generate a given amount of students.\nDELETE   - Delete an existing student by ID.\nPRINT    - Print the data of all students.\nAVERAGE  - Calcuate the average GPA of all students.\nHELP     - Print all valid commands.\nQUIT     - Exit the program.";
-        } else if (!strcmp(command, "QUIT")) { //quit the program
+        } else if (command == "RELOAD") { //reload name files
+            loadNames(firstNames, lastNames);
+        } else if (command == "HELP") { //print all valid command words
+            cout << "\nYour command words are:\nADD      - Manually create a new student.\nGENERATE - Randomly generate a given amount of students.\nDELETE   - Delete an existing student by ID.\nPRINT    - Print the data of all students.\nAVERAGE  - Calcuate the average GPA of all students.\nRELOAD   - Reload the two name files.\nHELP     - Print all valid commands.\nQUIT     - Exit the program.";
+        } else if (command == "QUIT") { //quit the program
             continuing = false; //leave the main player loop
         } else { //give error message if the user typed something unacceptable
             cout << "\nInvalid command \"" << command << "\". (type HELP for help)";
         }
-        
-        CinIgnoreAll(); //ignore any invalid or extra input that may have been typed this time
     }
 
     //says bye
