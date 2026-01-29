@@ -2,12 +2,13 @@
 *  1/27/2026
 *  This program is a student database that uses a hash table which handles collisions using chaining. Chains have a maximum
 *  length of 3. When this is exceeded, the hash table length is doubled and all the nodes are rehashed. The hash algorithm
-*  used is SHA-3. The user can ADD a new student, which will be added to the list in increasing ID order. You can DELETE
-*  the student, and PRINT all the students' data. You can also print the AVERAGE of all their GPAs, ask for HELP to print
-*  all the valid commands, or QUIT the program.
+*  used is SHA-3; all nodes are assigned a hash on creation based on their student ID. The user can ADD a new student, which
+*  will be added to the table according to its hash. You can DELETE the student, and PRINT all the students' data. You can
+*  also print the AVERAGE of all their GPAs, ask for HELP to print all the valid commands, or QUIT the program. The user can
+*  also RELOAD the name files if necessary.
 *
 *  Hash tables are efficient because you don't have to iterate across every student to check if they have the right ID,
-*  you just plug in the name and it gives you the index!
+*  you just plug in the ID and it gives you the index!
 */
 
 #include <iostream>
@@ -84,7 +85,7 @@ bool placeNode(Node* node, Node** table, size_t index) {
         return false; //no need to rehash because the chain length is 1 guaranteed!
     }
     Node* current = table[index]; //finds the beginning node
-    int chainlen = 1; //how long the chain is
+    int chainlen = 2; //how long the chain is, starts at 2 because it includes the first and (new) last nodes
     for (; current->getNext() != NULL;) { //iterate through the chain until we reach the last node
         current = current->getNext(); //go to the next node
         chainlen++; //increment the chain length since we checked one more node
@@ -101,21 +102,20 @@ void reHash(Node**& table, size_t& tablelen) {
             nodes.push_back(current); //add the current node to the nodes vector
         }
     }
-
-    bool continuing = true;
-    while (continuing) {
-        delete[] table;
-        for (Node* node : nodes) {
+    //continues looping until we successfully rehash (usually this just runs once, but this accounts for the unlikely edge case of accidentally creating another 4 chain while rehashing)
+    for (bool continuing = true; continuing;) {
+        delete[] table; //deletes the old overcrowded hash table
+        for (Node* node : nodes) { //nullify all node linkages since they're gonna be in different buckets now
             node->setNext(NULL);
         }
-        tablelen *= 2;
-        table = new Node*[tablelen](); //the hash table of linked list chains
-        continuing = false;
-        for (Node* node : nodes) {
+        tablelen *= 2; //double the hash table length and create a new shiny hash table with the new length
+        table = new Node*[tablelen](); //the new shiny hash table
+        continuing = false; //assume success to start
+        for (Node* node : nodes) { //sort all the nodes into the new hash table based on their hash and the new length
             size_t i = deHash(node->getHash(), tablelen); //gets the index based on the hash
-            if (placeNode(node, table, i)) {
-                continuing = true;
-                break;
+            if (placeNode(node, table, i)) { //puts the node in the new spot and checks for a chain length greater than 3
+                continuing = true; //if we detect too long a chain, we must do all that again, so we continuing!
+                break; //break, no need to sort the rest of the nodes if we're just gonna unsort them immediately
             }
         }
     }
@@ -185,14 +185,12 @@ Node* createStudent(Node** table, size_t tablelen) {
 
     //get the student's gpa
     cout << "\nEnter " << firstname << "'s GPA.";
-    continuing = true; //continues until valid input is given
-    while (continuing) {
+    for (continuing = true; continuing;) { //continues until valid input is given
         cout << "\n> ";
         cin >> gpa; //gets the gpa float
         if (cin) { //end loop if valid input was given
             continuing = false;
-        }
-        else { //error message otherwise
+        } else { //error message otherwise
             cout << "\nGPA must be a float.";
         }
         CinIgnoreAll(true); //removes the newline character of invalid input
@@ -211,12 +209,13 @@ void generateStudent(Node**& table, size_t& tablelen, vector<string>& firstnames
 
     int id; //the ID this student will have, we get it by incrementing genID until we find an unused ID
     size_t index; //the bucket of the hash table the student will be placed into
+    string hash; //the student's hash based on the ID
 
-    bool continuing = true; //continues until valid ID is found
-    while (continuing) {
+    for (bool continuing = true; continuing;) { //continues until valid ID is found
         id = genID++; //gets the next ID and then increments it (the one in main())
+        hash = SHA3::Hash(id); //gets the hash of the new ID
         continuing = false; //assumes valid ID to start
-        index = deHash(SHA3::Hash(id), tablelen); //gets the index that the given ID would be placed at
+        index = deHash(hash, tablelen); //gets the index that the given ID would be placed at
 
         //iterates through the chain at index i and goes to the next one each iteration until it meets a null node, that being the end
         for (Node* current = table[index]; current != NULL; current = current->getNext()) { //in order to check if the currently considered ID is taken for reasons stated above the createStudent function
@@ -225,13 +224,12 @@ void generateStudent(Node**& table, size_t& tablelen, vector<string>& firstnames
                 break; //break since we know there's a conflict alredy so more checks would waste valuable time
             }
         }
-    }
-
-    float gpa = (rand()%450)/100.0; //generates a random gpa between 0.0 and 4.5
+    } //generates a random gpa between 0.0 and 4.5
+    float gpa = (rand()%450)/100.0;
 
     //creates a new student and node using the generated data
     Student* student = new Student(firstname, lastname, id, gpa);
-    Node* node = new Node(student, SHA3::Hash(id));
+    Node* node = new Node(student, hash);
     
     //place the student at the found index
     if (placeNode(node, table, index)) { //if placeNode says we exceeded the chain length limit, we rehash!
@@ -239,34 +237,33 @@ void generateStudent(Node**& table, size_t& tablelen, vector<string>& firstnames
     }
 }
 
-// 
+//get an amount from the player, and then generate that many new students
 void initGeneration(Node**& table, size_t& tablelen, vector<string>& firstnames, vector<string>& lastnames, int& genID) {
-    if (!firstnames.size() || !lastnames.size()) {
-        cout << "\nNo valid names available; can't generate students.";
+    if (!firstnames.size() || !lastnames.size()) { //if our name lists are empty due to file issues, we can't generate any students
+        cout << "\nNo valid names available; can't generate students."; //so we give an error and return, no generating allowed
         return;
     }
     cout << "\nHow many students to generate?";
-    int amount = makeNum(false);
-    cout << "\n";
-    for (int i = 0; i < amount; i++) {
+    int amount = makeNum(false); //gets how many students to generate
+    cout << "\n"; //formatting!
+    for (int i = 0; i < amount; i++) { //generates as many students as specified
         generateStudent(table, tablelen, firstnames, lastnames, genID);
-        cout << "\rProgress: " << i * 100.0 / amount << "%" << flush;
+        cout << "\rProgress: " << i * 100.0 / amount << "%" << flush; //prints the progress percentage in float form, for very large amounts (also overwrites the last percentage printing, looks more progress bar-y that way)
     }
-    cout << "\rSuccessfully generated " << amount << " student";
-    if (amount != 1) {
+    cout << "\rSuccessfully generated " << amount << " student"; //overwrites the progress indicator with the success message! (looks better by overwriting rather than a new line)
+    if (amount != 1) { //make it plural if it wasn't specifically 1 student
         cout << "s";
     }
-    cout << "!";
+    cout << "!"; //exclamation mark!
 }
 
-//creates a new student node and adds it into the linked list according to increasing id order
+//creates a new student node which the player can manually set the values for, and inserts it into the hash table
 void makeStudent(Node**& table, size_t& tablelen) {
-    Node* newguy = createStudent(table, tablelen);
-
-    size_t index = deHash(newguy->getHash(), tablelen);
-
+    Node* newguy = createStudent(table, tablelen); //create the student with all their values and get their node
+    size_t index = deHash(newguy->getHash(), tablelen); //find where to put the student node
+    //try to place the student; if doing so creates a chain longer than 3 nodes, we rehash the hash table!
     if (placeNode(newguy, table, index)) {
-        reHash(table, tablelen);
+        reHash(table, tablelen); //rehash the hash table!
     } //success text!
     cout << "\nSuccessfully created " << newguy->getStudent()->getName(0) << "!";
 }
@@ -337,7 +334,7 @@ void printAll(Node** table, size_t tablelen) {
 
 //the main loop
 int main() {
-    size_t tableLen = 100; //the length of the hash table which gets doubled when 3+ collisions happen on the same index
+    size_t tableLen = 100; //the length of the hash table which gets doubled when chain length exceeds 3 on the same index
     Node** table = new Node*[tableLen](); //the hash table of linked list chains
 
     vector<string> firstNames; //the vectors of names that are used to pseudorandomly generate students
@@ -354,8 +351,7 @@ int main() {
     
     string command; //the command that the user inputs into (now outside the loop! how exciting!)
     //continues until continuing is falsified (by typing QUIT)
-    bool continuing = true;
-    while (continuing) {
+    for (bool continuing = true; continuing;) {
         cout << "\n> "; //thing for the player to type after
         
         getline(cin, command); //gets the player input, up to 255 characters
@@ -376,7 +372,7 @@ int main() {
         } else if (command == "RELOAD") { //reload name files
             loadNames(firstNames, lastNames);
         } else if (command == "HELP") { //print all valid command words
-            cout << "\nYour command words are:\nADD      - Manually create a new student.\nGENERATE - Randomly generate a given amount of students.\nDELETE   - Delete an existing student by ID.\nPRINT    - Print the data of all students.\nAVERAGE  - Calcuate the average GPA of all students.\nRELOAD   - Reload the two name files.\nHELP     - Print all valid commands.\nQUIT     - Exit the program.";
+            cout << "\nYour command words are:\nADD      - Manually create a new student.\nGENERATE - Randomly generate a given amount of students.\nDELETE   - Delete an existing student by ID.\nPRINT    - Print the data of all students.\nAVERAGE  - Calculate the average GPA of all students.\nRELOAD   - Reload the two name files.\nHELP     - Print all valid commands.\nQUIT     - Exit the program.";
         } else if (command == "QUIT") { //quit the program
             continuing = false; //leave the main player loop
         } else { //give error message if the user typed something unacceptable

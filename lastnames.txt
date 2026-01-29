@@ -94,7 +94,7 @@ Football
 Calculator
 Shovel
 Locke
-Triginometry
+Trigonometry
 Lobster
 Sparrow
 Desmos
@@ -173,3 +173,8 @@ Karpov
 Princeton
 Kent
 Turing
+Churchill
+Vu
+Structure
+Coincidence
+One

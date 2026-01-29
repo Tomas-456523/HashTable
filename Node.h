@@ -16,7 +16,7 @@ public:
     
     Student* getStudent(); //get the student associated with this node
     Node* getNext(); //get the node that goes after this one
-    std::string& getHash(); //get the hash associated with this node
+    const std::string& getHash(); //get the hash associated with this node
 private:
     Node* nextNode; //the next node that goes after this one in the linked list, defaults to NULL in constructor
     Student* student; //the student pointed to by this node

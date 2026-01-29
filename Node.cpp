@@ -18,7 +18,7 @@ Student* Node::getStudent() { //get the student associated with this node
 Node* Node::getNext() { //get the node this node points to
     return nextNode;
 }
-string& Node::getHash() { //get the hash associated with this node's student's ID
+const string& Node::getHash() { //get the hash associated with this node's student's ID
     return hash;
 }
 Node::~Node() { //delete the student when the node is deleted since the two are associated, make sure the students aren't used anywhere else
