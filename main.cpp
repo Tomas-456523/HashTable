@@ -126,7 +126,6 @@ void reHash(Node**& table, size_t& tablelen) {
         for (Node* node : nodes) { //nullify all node linkages since they're gonna be in different buckets now
             node->setNext(NULL);
         }
-        cout << "\nREHASHING " << tablelen*2 << "\n";
         tablelen *= 2; //double the hash table length and create a new shiny hash table with the new length
         table = new Node*[tablelen](); //the new shiny hash table
         continuing = false; //assume success to start
