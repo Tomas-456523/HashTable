@@ -1,5 +1,5 @@
 /* Tomas Carranza Echaniz
-*  1/27/2026
+*  1/29/2026
 *  This program is a student database that uses a hash table which handles collisions using chaining. Chains have a maximum
 *  length of 3. When this is exceeded, the hash table length is doubled and all the nodes are rehashed. The hash algorithm
 *  used is SHA-3; all nodes are assigned a hash on creation based on their student ID. The user can ADD a new student, which
