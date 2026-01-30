@@ -20,6 +20,8 @@
 #include <cstdlib>
 #include <ctime>
 #include <vector>
+#include <algorithm>
+#include <cctype>
 #include "Student.h"
 #include "Node.h"
 #include "SHA3.h"
@@ -63,7 +65,7 @@ int makeNum(bool id = true) { //id bool is for giving id error or normal error
 
 //checks the table for if it's empty based on if it's all NULL nodes
 bool getEmpty(Node** table, size_t tablelen) {
-    for (int i = 0; i < tablelen; i++) { //iterates through the table, returns false, table is not empty, upon reaching a non-NULL node
+    for (size_t i = 0; i < tablelen; i++) { //iterates through the table, returns false, table is not empty, upon reaching a non-NULL node
         if (table[i] != NULL) {
             return false;
         }
@@ -71,10 +73,26 @@ bool getEmpty(Node** table, size_t tablelen) {
     return true;
 }
 
-//get an index in the hash table based on the given hash and table length
+//get an index in the hash table based on the given hash and table length, based on Absorb() in SHA3.cpp
 size_t deHash(const string& hash, size_t tablelen) {
-    size_t index; //create an index
-    memcpy(&index, &hash[0], sizeof(size_t)); //write as much data from the hash into the index as possible
+    size_t index = 0; //create an index
+    //de-stringifies hash so we can use the bytes
+    const uint8_t* hashBytes = reinterpret_cast<const uint8_t*>(&hash[0]);
+    size_t hashSize = hash.size(); //the full size of the hash
+    //the amount of bytes size_t takes up (the size of size!)
+    const size_t sizesize = sizeof(size_t);
+
+    while (hashSize > 0) { //xors the hash into the index in size-sized chunks (so we don't just waste the rest of the hash we worked so hard to make)
+        size_t hashChunk = 0; //creates an empty chunk to memcpy into
+        size_t chunkSize = min(hashSize, sizesize); //get the size of the chunk (sizesize for everything except the end of the hash, so we don't go over the end of hash if hashSize%sizesize != 0)
+        memcpy(&hashChunk, hashBytes, chunkSize); //get the chunkSize-sized chunk of the hash
+        index ^= hashChunk; //xor the chunk into the index
+        hashBytes += chunkSize; //advance the hash pointer forward so we read the next chunk next loop
+        hashSize -= chunkSize; //subtract from the hashSize so we know how big the last chunk is when we get there
+    } //xors the index's top half into the bottom half so that both halves matter equally in the final modulo, because otherwise the top half wouldn't matter as much
+    index ^= index >> sizesize*4+1; //we use that amount cause bitshift uses bit amounts, and 8 bits = 1 byte, and we want to shift it by half, so we multiply by 4, and then we add one to reduce symmetry. sizesize*4+1 is computed before >>
+    //mix the index with Knuth's constant, well known for de-linearizing hashes (so more random, less collisions). SHA-3 is very good at hashing, but since we fold it so much a lot of the entropy is gone, so we also do this
+    index *= 11400714819323198485ULL;
     return index % tablelen; //modulo the index based on tablelen to stay within bounds and return that
 }
 
@@ -108,6 +126,7 @@ void reHash(Node**& table, size_t& tablelen) {
         for (Node* node : nodes) { //nullify all node linkages since they're gonna be in different buckets now
             node->setNext(NULL);
         }
+        cout << "\nREHASHING " << tablelen*2 << "\n";
         tablelen *= 2; //double the hash table length and create a new shiny hash table with the new length
         table = new Node*[tablelen](); //the new shiny hash table
         continuing = false; //assume success to start
